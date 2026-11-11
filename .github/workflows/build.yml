@@ -20,7 +20,7 @@ jobs:
           pip install pyinstaller
       - name: Build Windows Executable
         run: |
-          flet pack main.py --name "BinanceLongScannerPro" --add-data "scanner_engine.py;." --add-data "notifier.py;." --add-data "updater.py;."
+          pyinstaller --noconfirm --onefile --windowed --name "BinanceLongScannerPro" --add-data "scanner_engine.py;." --add-data "notifier.py;." --add-data "updater.py;." main.py
       - name: Upload Windows EXE
         uses: actions/upload-artifact@v4
         with:
