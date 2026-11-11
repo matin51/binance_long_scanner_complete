@@ -50,7 +50,6 @@ def main(page: ft.Page):
         page.client_storage.set("quota_date", today_str)
         page.client_storage.set("daily_sent_coins", [])
         page.client_storage.set("saved_msg_logs", [])
-
     def check_and_reset_day():
         nonlocal today_str, daily_sent_coins, message_logs
         current_day = date.today().isoformat()
@@ -107,10 +106,9 @@ def main(page: ft.Page):
     active_coins_txt = ft.Text("0", size=20, weight=ft.FontWeight.BOLD, color=GOLD)
     daily_quota_txt = ft.Text(f"{len(daily_sent_coins)} / {config['daily_limit']}", size=20, weight=ft.FontWeight.BOLD, color=GREEN)
     timeframe_badge_txt = ft.Text("15m + 1h", size=16, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY)
-    
+
     live_log_txt = ft.Text("Tap 'Run' to start live Binance Futures scanning...", size=12, color=TEXT_MUTED)
     progress_bar = ft.ProgressBar(value=0, color=GOLD, bgcolor=ELEVATED_BG, height=4, border_radius=2, visible=False)
-
     empty_state = ft.Container(
         padding=30,
         alignment=ft.alignment.center,
@@ -244,7 +242,6 @@ def main(page: ft.Page):
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
             ], spacing=6)
         )
-
     def create_signal_card(symbol, tf, gain, vol, entry, sl, tp1, tp2, tp3, timestamp_str):
         risk_pct = round(((entry - sl) / entry) * 100, 2)
         copy_payload = (
@@ -294,7 +291,6 @@ def main(page: ft.Page):
                 )
             ], spacing=8)
         )
-
     def scanner_loop():
         nonlocal is_running, cached_gainers
         while is_running:
@@ -352,198 +348,218 @@ def main(page: ft.Page):
                                         entry, sl, tp1, tp2, tp3
                                     )
                                     status_str = "Sent ✅" if ok else "Failed ❌"
-log_msg = f"[{now_str}] {sym} ({tf}) | Entry: {entry} -> {status_str}"
-message_logs.insert(0, log_msg)
-page.client_storage.set("saved_msg_logs", message_logs[:50])
-if empty_state in signals_list.controls:
-signals_list.controls.remove(empty_state)
-card = create_signal_card(sym, tf, info["gain"], info["volume"], entry, sl, tp1, tp2, tp3, now_str)
-signals_list.controls.insert(0, card)
-live_log_txt.value = f"🔥 SIGNAL FOUND: {sym} ({tf})!"
-page.update()
-progress_bar.visible = False
-if is_running:
-live_log_txt.value = f"Scan complete. Next cycle in {config['scan_interval']}s..."
-page.update()
-except Exception as ex:
-live_log_txt.value = f"Network warning: {str(ex)[:45]}..."
-progress_bar.visible = False
-page.update()
-for _ in range(config["scan_interval"]):
-if not is_running:
-break
-time.sleep(1)
-def toggle_scanner(e):
-nonlocal is_running
-is_running = not is_running
-if is_running:
-run_btn.text = "Stop"
-run_btn.icon = ft.Icons.STOP_CIRCLE
-run_btn.bgcolor = RED
-status_dot.bgcolor = GREEN
-status_label.value = "SCANNING"
-threading.Thread(target=scanner_loop, daemon=True).start()
-else:
-run_btn.text = "Run"
-run_btn.icon = ft.Icons.PLAY_ARROW
-run_btn.bgcolor = GREEN
-status_dot.bgcolor = TEXT_MUTED
-status_label.value = "IDLE"
-progress_bar.visible = False
-live_log_txt.value = "Scanner paused."
-page.update()
-search_input = ft.TextField(
-label="Coin Symbol (e.g. BTCUSDT, SOLUSDT)",
-border_color=BORDER_COLOR, focused_border_color=GOLD,
-text_size=13, height=45, capitalizations=ft.TextCapitalization.CHARACTERS
-)
-def analyze_manual_coin(e):
-sym = search_input.value.strip().upper()
-if not sym:
-return
-if not sym.endswith("USDT"):
-sym += "USDT"
-show_snack(f"Analyzing {sym}...", GOLD)
-def worker():
-try:
-t_info = cached_gainers.get(sym)
-report = get_coin_full_analysis(sym, t_info)
-render_selected_coin_box(report)
-page.update()
-except Exception:
-show_snack(f"Could not fetch {sym}. Check symbol name.", RED)
-threading.Thread(target=worker, daemon=True).start()
-def open_message_box(e):
-update_message_dialog_list()
-dlg = ft.AlertDialog(
-bgcolor=CARD_BG,
-title=ft.Row([
-ft.Text("Analyzer & Alert Logs", size=16, weight=ft.FontWeight.BOLD),
-ft.IconButton(ft.Icons.DELETE_SWEEP, icon_color=RED, tooltip="Clear All Logs", on_click=delete_all_messages)
-], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-content=ft.Container(
-width=420,
-content=ft.Column([
-ft.Row([
-ft.Container(content=search_input, expand=True),
-ft.ElevatedButton("Check", bgcolor=GOLD, color=ft.Colors.BLACK, height=45, on_click=analyze_manual_coin)
-], spacing=8),
-selected_coin_card_holder,
-ft.Divider(color=BORDER_COLOR),
-msg_header_counter,
-msg_list_view
-], tight=True, spacing=10)
-),
-actions=[ft.TextButton("Close", on_click=lambda e: page.close(dlg))]
-)
-page.open(dlg)
-def open_settings(e):
-ntfy_field = ft.TextField(label="Ntfy.sh Topic Name", value=config["ntfy_topic"], border_color=BORDER_COLOR)
-gain_field = ft.TextField(label="Min 24h Gain (%)", value=str(config["min_gain"]), keyboard_type=ft.KeyboardType.NUMBER, border_color=BORDER_COLOR)
-interval_field = ft.TextField(label="Scan Interval (Seconds)", value=str(config["scan_interval"]), keyboard_type=ft.KeyboardType.NUMBER, border_color=BORDER_COLOR)
-limit_field = ft.TextField(label="Daily Signal Limit", value=str(config["daily_limit"]), keyboard_type=ft.KeyboardType.NUMBER, border_color=BORDER_COLOR)
-def save_settings(ev):
-try:
-config["ntfy_topic"] = ntfy_field.value.strip()
-config["min_gain"] = max(1.0, float(gain_field.value))
-config["scan_interval"] = max(5, int(interval_field.value))
-config["daily_limit"] = max(1, int(limit_field.value))
-page.client_storage.set("ntfy_topic", config["ntfy_topic"])
-page.client_storage.set("min_gain", config["min_gain"])
-page.client_storage.set("scan_interval", config["scan_interval"])
-page.client_storage.set("daily_limit", config["daily_limit"])
-daily_quota_txt.value = f"{len(daily_sent_coins)} / {config['daily_limit']}"
-page.close(dlg)
-show_snack("Settings saved successfully!")
-except ValueError:
-show_snack("Please enter valid numbers!", RED)
-dlg = ft.AlertDialog(
-bgcolor=CARD_BG,
-title=ft.Text("Scanner Settings", size=16, weight=ft.FontWeight.BOLD),
-content=ft.Container(
-width=360,
-content=ft.Column([
-ntfy_field, gain_field, interval_field, limit_field,
-ft.Text(f"App Version: v{CURRENT_VERSION}", size=11, color=TEXT_MUTED)
-], tight=True, spacing=12)
-),
-actions=[
-ft.TextButton("Cancel", on_click=lambda ev: page.close(dlg)),
-ft.ElevatedButton("Save", bgcolor=GOLD, color=ft.Colors.BLACK, on_click=save_settings)
-]
-)
-page.open(dlg)
-run_btn = ft.ElevatedButton(
-"Run", icon=ft.Icons.PLAY_ARROW, bgcolor=GREEN, color=ft.Colors.BLACK,
-style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10)),
-on_click=toggle_scanner
-)
-header = ft.Container(
-bgcolor=CARD_BG,
-padding=ft.padding.symmetric(horizontal=16, vertical=12),
-border=ft.border.only(bottom=ft.BorderSide(1, BORDER_COLOR)),
-content=ft.Row([
-ft.Row([
-ft.Icon(ft.Icons.CANDLESTICK_CHART, color=GOLD, size=24),
-ft.Column([
-ft.Text("Binance Long Pro", size=16, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
-status_pill
-], spacing=4)
-], spacing=10),
-ft.Row([
-ft.IconButton(ft.Icons.MAIL_OUTLINE, icon_color=GOLD, tooltip="Analyzer & Logs", on_click=open_message_box),
-ft.IconButton(ft.Icons.SETTINGS_OUTLINED, icon_color=TEXT_PRIMARY, tooltip="Settings", on_click=open_settings),
-run_btn
-], spacing=4)
-], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-)
-stats_row = ft.Row([
-ft.Container(
-expand=True, bgcolor=CARD_BG, padding=12, border_radius=12,
-border=ft.border.all(1, BORDER_COLOR),
-content=ft.Column([
-ft.Text("ACTIVE GAINERS", size=10, color=TEXT_MUTED),
-active_coins_txt
-], spacing=4)
-),
-ft.Container(
-expand=True, bgcolor=CARD_BG, padding=12, border_radius=12,
-border=ft.border.all(1, BORDER_COLOR),
-content=ft.Column([
-ft.Text("DAILY QUOTA", size=10, color=TEXT_MUTED),
-daily_quota_txt
-], spacing=4)
-),
-ft.Container(
-expand=True, bgcolor=CARD_BG, padding=12, border_radius=12,
-border=ft.border.all(1, BORDER_COLOR),
-content=ft.Column([
-ft.Text("STRATEGY", size=10, color=TEXT_MUTED),
-timeframe_badge_txt
-], spacing=4)
-),
-], spacing=10)
-status_banner = ft.Container(
-bgcolor=ELEVATED_BG, padding=10, border_radius=10,
-border=ft.border.all(1, BORDER_COLOR),
-content=ft.Column([
-ft.Row([
-ft.Icon(ft.Icons.TERMINAL, size=14, color=GOLD),
-ft.Container(content=live_log_txt, expand=True)
-], spacing=8),
-progress_bar
-], spacing=6)
-)
-body = ft.Container(
-expand=True,
-padding=ft.padding.symmetric(horizontal=16, vertical=12),
-content=ft.Column([
-stats_row,
-status_banner,
-ft.Text("LIVE CONFIRMED SIGNALS", size=12, weight=ft.FontWeight.BOLD, color=TEXT_MUTED),
-signals_list
-], spacing=12, expand=True)
-)
-page.add(ft.Column([header, body], spacing=0, expand=True))
-if name == "main":
-ft.app(target=main)
+                                    log_msg = f"[{now_str}] {sym} ({tf}) | Entry: {entry} -> {status_str}"
+                                    message_logs.insert(0, log_msg)
+                                    page.client_storage.set("saved_msg_logs", message_logs[:50])
+
+                                    if empty_state in signals_list.controls:
+                                        signals_list.controls.remove(empty_state)
+
+                                    card = create_signal_card(sym, tf, info["gain"], info["volume"], entry, sl, tp1, tp2, tp3, now_str)
+                                    signals_list.controls.insert(0, card)
+                                    live_log_txt.value = f"🔥 SIGNAL FOUND: {sym} ({tf})!"
+                                    page.update()
+
+                    progress_bar.visible = False
+                    if is_running:
+                        live_log_txt.value = f"Scan complete. Next cycle in {config['scan_interval']}s..."
+                        page.update()
+
+            except Exception as ex:
+                live_log_txt.value = f"Network warning: {str(ex)[:45]}..."
+                progress_bar.visible = False
+                page.update()
+
+            for _ in range(config["scan_interval"]):
+                if not is_running:
+                    break
+                time.sleep(1)
+    def toggle_scanner(e):
+        nonlocal is_running
+        is_running = not is_running
+        if is_running:
+            run_btn.text = "Stop"
+            run_btn.icon = ft.Icons.STOP_CIRCLE
+            run_btn.bgcolor = RED
+            status_dot.bgcolor = GREEN
+            status_label.value = "SCANNING"
+            threading.Thread(target=scanner_loop, daemon=True).start()
+        else:
+            run_btn.text = "Run"
+            run_btn.icon = ft.Icons.PLAY_ARROW
+            run_btn.bgcolor = GREEN
+            status_dot.bgcolor = TEXT_MUTED
+            status_label.value = "IDLE"
+            progress_bar.visible = False
+            live_log_txt.value = "Scanner paused."
+        page.update()
+
+    search_input = ft.TextField(
+        label="Coin Symbol (e.g. BTCUSDT, SOLUSDT)",
+        border_color=BORDER_COLOR, focused_border_color=GOLD,
+        text_size=13, height=45, capitalizations=ft.TextCapitalization.CHARACTERS
+    )
+
+    def analyze_manual_coin(e):
+        sym = search_input.value.strip().upper()
+        if not sym:
+            return
+        if not sym.endswith("USDT"):
+            sym += "USDT"
+        show_snack(f"Analyzing {sym}...", GOLD)
+        def worker():
+            try:
+                t_info = cached_gainers.get(sym)
+                report = get_coin_full_analysis(sym, t_info)
+                render_selected_coin_box(report)
+                page.update()
+            except Exception:
+                show_snack(f"Could not fetch {sym}. Check symbol name.", RED)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def open_message_box(e):
+        update_message_dialog_list()
+        dlg = ft.AlertDialog(
+            bgcolor=CARD_BG,
+            title=ft.Row([
+                ft.Text("Analyzer & Alert Logs", size=16, weight=ft.FontWeight.BOLD),
+                ft.IconButton(ft.Icons.DELETE_SWEEP, icon_color=RED, tooltip="Clear All Logs", on_click=delete_all_messages)
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            content=ft.Container(
+                width=420,
+                content=ft.Column([
+                    ft.Row([
+                        ft.Container(content=search_input, expand=True),
+                        ft.ElevatedButton("Check", bgcolor=GOLD, color=ft.Colors.BLACK, height=45, on_click=analyze_manual_coin)
+                    ], spacing=8),
+                    selected_coin_card_holder,
+                    ft.Divider(color=BORDER_COLOR),
+                    msg_header_counter,
+                    msg_list_view
+                ], tight=True, spacing=10)
+            ),
+            actions=[ft.TextButton("Close", on_click=lambda e: page.close(dlg))]
+        )
+        page.open(dlg)
+
+    def open_settings(e):
+        ntfy_field = ft.TextField(label="Ntfy.sh Topic Name", value=config["ntfy_topic"], border_color=BORDER_COLOR)
+        gain_field = ft.TextField(label="Min 24h Gain (%)", value=str(config["min_gain"]), keyboard_type=ft.KeyboardType.NUMBER, border_color=BORDER_COLOR)
+        interval_field = ft.TextField(label="Scan Interval (Seconds)", value=str(config["scan_interval"]), keyboard_type=ft.KeyboardType.NUMBER, border_color=BORDER_COLOR)
+        limit_field = ft.TextField(label="Daily Signal Limit", value=str(config["daily_limit"]), keyboard_type=ft.KeyboardType.NUMBER, border_color=BORDER_COLOR)
+
+        def save_settings(ev):
+            try:
+                config["ntfy_topic"] = ntfy_field.value.strip()
+                config["min_gain"] = max(1.0, float(gain_field.value))
+                config["scan_interval"] = max(5, int(interval_field.value))
+                config["daily_limit"] = max(1, int(limit_field.value))
+
+                page.client_storage.set("ntfy_topic", config["ntfy_topic"])
+                page.client_storage.set("min_gain", config["min_gain"])
+                page.client_storage.set("scan_interval", config["scan_interval"])
+                page.client_storage.set("daily_limit", config["daily_limit"])
+
+                daily_quota_txt.value = f"{len(daily_sent_coins)} / {config['daily_limit']}"
+                page.close(dlg)
+                show_snack("Settings saved successfully!")
+            except ValueError:
+                show_snack("Please enter valid numbers!", RED)
+
+        dlg = ft.AlertDialog(
+            bgcolor=CARD_BG,
+            title=ft.Text("Scanner Settings", size=16, weight=ft.FontWeight.BOLD),
+            content=ft.Container(
+                width=360,
+                content=ft.Column([
+                    ntfy_field, gain_field, interval_field, limit_field,
+                    ft.Text(f"App Version: v{CURRENT_VERSION}", size=11, color=TEXT_MUTED)
+                ], tight=True, spacing=12)
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda ev: page.close(dlg)),
+                ft.ElevatedButton("Save", bgcolor=GOLD, color=ft.Colors.BLACK, on_click=save_settings)
+            ]
+        )
+        page.open(dlg)
+
+    run_btn = ft.ElevatedButton(
+        "Run", icon=ft.Icons.PLAY_ARROW, bgcolor=GREEN, color=ft.Colors.BLACK,
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10)),
+        on_click=toggle_scanner
+    )
+
+    header = ft.Container(
+        bgcolor=CARD_BG,
+        padding=ft.padding.symmetric(horizontal=16, vertical=12),
+        border=ft.border.only(bottom=ft.BorderSide(1, BORDER_COLOR)),
+        content=ft.Row([
+            ft.Row([
+                ft.Icon(ft.Icons.CANDLESTICK_CHART, color=GOLD, size=24),
+                ft.Column([
+                    ft.Text("Binance Long Pro", size=16, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
+                    status_pill
+                ], spacing=4)
+            ], spacing=10),
+            ft.Row([
+                ft.IconButton(ft.Icons.MAIL_OUTLINE, icon_color=GOLD, tooltip="Analyzer & Logs", on_click=open_message_box),
+                ft.IconButton(ft.Icons.SETTINGS_OUTLINED, icon_color=TEXT_PRIMARY, tooltip="Settings", on_click=open_settings),
+                run_btn
+            ], spacing=4)
+        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+    )
+
+    stats_row = ft.Row([
+        ft.Container(
+            expand=True, bgcolor=CARD_BG, padding=12, border_radius=12,
+            border=ft.border.all(1, BORDER_COLOR),
+            content=ft.Column([
+                ft.Text("ACTIVE GAINERS", size=10, color=TEXT_MUTED),
+                active_coins_txt
+            ], spacing=4)
+        ),
+        ft.Container(
+            expand=True, bgcolor=CARD_BG, padding=12, border_radius=12,
+            border=ft.border.all(1, BORDER_COLOR),
+            content=ft.Column([
+                ft.Text("DAILY QUOTA", size=10, color=TEXT_MUTED),
+                daily_quota_txt
+            ], spacing=4)
+        ),
+        ft.Container(
+            expand=True, bgcolor=CARD_BG, padding=12, border_radius=12,
+            border=ft.border.all(1, BORDER_COLOR),
+            content=ft.Column([
+                ft.Text("STRATEGY", size=10, color=TEXT_MUTED),
+                timeframe_badge_txt
+            ], spacing=4)
+        ),
+    ], spacing=10)
+
+    status_banner = ft.Container(
+        bgcolor=ELEVATED_BG, padding=10, border_radius=10,
+        border=ft.border.all(1, BORDER_COLOR),
+        content=ft.Column([
+            ft.Row([
+                ft.Icon(ft.Icons.TERMINAL, size=14, color=GOLD),
+                ft.Container(content=live_log_txt, expand=True)
+            ], spacing=8),
+            progress_bar
+        ], spacing=6)
+    )
+
+    body = ft.Container(
+        expand=True,
+        padding=ft.padding.symmetric(horizontal=16, vertical=12),
+        content=ft.Column([
+            stats_row,
+            status_banner,
+            ft.Text("LIVE CONFIRMED SIGNALS", size=12, weight=ft.FontWeight.BOLD, color=TEXT_MUTED),
+            signals_list
+        ], spacing=12, expand=True)
+    )
+
+    page.add(ft.Column([header, body], spacing=0, expand=True))
+
+if __name__ == "__main__":
+    ft.app(target=main)

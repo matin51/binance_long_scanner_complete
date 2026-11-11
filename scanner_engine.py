@@ -76,7 +76,6 @@ def fetch_klines(symbol, interval):
     url = f"{BASE_URL}/fapi/v1/klines"
     params = {"symbol": symbol, "interval": interval, "limit": 120}
     return session.get(url, params=params, timeout=10).json()
-
 def check_bottom_bullish_pattern(klines_data):
     if not klines_data or not isinstance(klines_data, list) or len(klines_data) < 105:
         return False, 0, 0, 0, 0, 0, 0
@@ -95,20 +94,17 @@ def check_bottom_bullish_pattern(klines_data):
             'volume': float(k[5])
         })
 
-    curr = candles[-2]  # ১ম কনফার্ম বুলিশ ক্যান্ডেল (ক্লোজড)
-    prev = candles[-3]  # সর্বনিম্ন (Bottom) রেড ক্যান্ডেল
+    curr = candles[-2]
+    prev = candles[-3]
 
-    # ১. সর্বনিম্ন সাপোর্ট জোন যাচাই
     support_zone_low = min(c['low'] for c in candles[-42:-2])
     is_absolute_bottom = prev['low'] <= support_zone_low * 1.0015 and curr['low'] >= prev['low'] * 0.998
     if not is_absolute_bottom:
         return False, 0, 0, 0, 0, 0, 0
 
-    # ২. বটম রেড ক্যান্ডেল ও পরের ১ম বুলিশ ক্যান্ডেল যাচাই
     if not (prev['close'] < prev['open'] and curr['close'] > curr['open']):
         return False, 0, 0, 0, 0, 0, 0
 
-    # ৩. পূর্বের ১০, ৫ এবং ৩ ক্যান্ডেলের ডাউনট্রেন্ড যাচাই
     past_10 = candles[-13:-3]
     past_5 = candles[-8:-3]
     past_3 = candles[-6:-3]
@@ -124,7 +120,6 @@ def check_bottom_bullish_pattern(klines_data):
     if not (downtrend_structure and red_in_10 and red_in_5 and downtrend_3):
         return False, 0, 0, 0, 0, 0, 0
 
-    # ৪. বুলিশ এনগালফিং ও ভলিউম কনফার্মেশন
     curr_body = curr['close'] - curr['open']
     prev_body = prev['open'] - prev['close']
     curr_total_range = curr['high'] - curr['low']
@@ -140,14 +135,12 @@ def check_bottom_bullish_pattern(klines_data):
     if not (bullish_engulfing and clean_strong_candle and volume_spike):
         return False, 0, 0, 0, 0, 0, 0
 
-    # ৫. চার্টের EMA(7) ব্রেকআউট ও MACD মোমেন্টাম যাচাই
     ema7 = calculate_ema(closes, 7)
     dif, dea, hist = calculate_macd(closes)
 
     if not (curr['close'] > ema7[-2] and hist[-2] > hist[-3] and dif[-2] >= dif[-3]):
         return False, 0, 0, 0, 0, 0, 0
 
-    # ৬. ঝুঁকিমুক্ত ও নির্ভুল SL ও TP হিসাব
     decimals = get_decimal_places(curr['close'])
     entry = curr['close']
     atr = calculate_atr(candles[:-1], period=14)
